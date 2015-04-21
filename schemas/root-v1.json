@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-04/hyper-schema#",
+  "type": "object",
+  "title": "HyperSchema for root API",
+  "id": "#root-v1",
+  "properties": {
+    "version": {
+      "type": "string"
+    }
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "${base_url}",
+      "mediaType": "application/vnd.github.root-v1+json",
+      "method": "GET",
+      "title":  "API Root"
+    }
+  ]
+}
