@@ -15,6 +15,12 @@ webhook = {
     }
 }
 
+travis_hook = """
+notifications:
+    webhooks:
+        -
+"""
+
 create_file = {
     "path": "",
     "message": "Added configuration",

@@ -12,5 +12,9 @@ class FileService():
         pass
 
     @staticmethod
+    def get_travis():
+        return yaml.load(templates.travis_hook)
+
+    @staticmethod
     def to_string(obj):
         return yaml.dump(obj, default_flow_style=False)

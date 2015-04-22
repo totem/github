@@ -1,12 +1,13 @@
 import requests
 import json
 import base64
-from conf.appconfig import CONFIG_PROVIDERS, ORCHESTRATOR_WEBHOOK, IMAGE_FACTORY_WEBHOOK
+from conf.appconfig import GITHUB, ORCHESTRATOR_WEBHOOK, IMAGE_FACTORY_WEBHOOK, TRAVIS_WEBHOOK
 from github.config_templates import templates
 from github.services.file_service import FileService
+from github.views.error import HooksFailed
 
-auth = (CONFIG_PROVIDERS["github"]["token"], "x-oauth-basic")
-base_url = CONFIG_PROVIDERS["github"]["endpoint_base"]
+auth = (GITHUB["token"], "x-oauth-basic")
+base_url = GITHUB["endpoint_base"]
 
 
 def get_path_params(owner, repo, hook_id=None, path=None):
@@ -20,74 +21,113 @@ def get_path_params(owner, repo, hook_id=None, path=None):
 
 
 class GithubHookRequests():
-    def list_hooks(self, owner, repo):
-        path_params = get_path_params(owner, repo)
-        url = "{base}/repos/{owner}/{repo}/hooks".format(**path_params)
-        resp = requests.get(url, auth=auth)
-        return resp.json()
 
-    def create_hook(self, owner, repo):
+    def create_totem_hooks(self, owner, repo):
         """
-        Create webhook
+        Create totem specific hooks
         """
-        path_params = get_path_params(owner, repo)
-        url = "{base}/repos/{owner}/{repo}/hooks".format(**path_params)
-        webhook_config = templates.webhook.copy()
-        response = []
-
-        existing_hooks = self.get_hooks(owner, repo)
+        resp = []
+        hooks = self.list_hooks(owner, repo)
+        existing_hooks = self.get_totem_hooks(hooks)
 
         if "image_factory" in existing_hooks and "orchestrator" in existing_hooks:
             return existing_hooks
 
-        # Create image factory webhook
         if "image_factory" not in existing_hooks:
-            webhook_config["events"][0] = "push"
-            webhook_config["config"]["url"] = IMAGE_FACTORY_WEBHOOK
-            if_resp = requests.post(url, data=json.dumps(webhook_config), auth=auth)
-            response.append(if_resp.json())
+            resp.append(self.create_hook(owner, repo, "push", IMAGE_FACTORY_WEBHOOK))
 
-        # Create orchestrator webhook
         if "orchestrator" not in existing_hooks:
-            webhook_config["events"][0] = "delete"
-            webhook_config["config"]["url"] = ORCHESTRATOR_WEBHOOK
-            orch_resp = requests.post(url, data=json.dumps(webhook_config), auth=auth)
-            response.append(orch_resp.json())
+            resp.append(self.create_hook(owner, repo, "delete", ORCHESTRATOR_WEBHOOK))
 
-        return response
+        return resp
 
-    def delete_hook(self, owner, repo):
+    def delete_hook(self, owner, repo, match=None):
         """
         Delete hook
         """
-        existing_hooks = self.get_hooks(owner, repo)
-        ids = map(lambda service: existing_hooks[service]["id"], existing_hooks)
+        hooks = self.list_hooks(owner, repo)
+        if match:
+            existing_hooks = self.get_hook(hooks, match)
+            ids = [existing_hooks["id"]]
+        else:
+            existing_hooks = self.get_totem_hooks(hooks)
+            if not len(existing_hooks.keys()):
+                raise HooksFailed("Error getting hook",
+                                  status_code=404,
+                                  details="Totem hooks do not exist on repo")
 
-        if len(ids):
-            for hook_id in ids:
-                path_params = get_path_params(owner, repo, hook_id)
-                url = "{base}/repos/{owner}/{repo}/hooks/{id}".format(**path_params)
-                resp = requests.delete(url, auth=auth)
+            ids = map(lambda service: existing_hooks[service]["id"], existing_hooks)
 
-                if resp.status_code != 204:
-                    return {"status": "failed"}
+        for hook_id in ids:
+            path_params = get_path_params(owner, repo, hook_id)
+            url = "{base}/repos/{owner}/{repo}/hooks/{id}".format(**path_params)
+            resp = requests.delete(url, auth=auth)
 
-            return {"status": "success"}
+            if resp.status_code != 204:
+                raise HooksFailed("Error deleting hooks",
+                                  status_code=resp.status_code,
+                                  details=resp.json())
 
-        return {"status": "failed"}
+        return {"status": "success"}
 
-    def get_hooks(self, owner, repo):
+    @staticmethod
+    def list_hooks(owner, repo):
+        path_params = get_path_params(owner, repo)
+        url = "{base}/repos/{owner}/{repo}/hooks".format(**path_params)
+        resp = requests.get(url, auth=auth)
+
+        if resp.status_code is not 200:
+            raise HooksFailed("Error getting hooks",
+                              status_code=resp.status_code,
+                              details=resp.json())
+
+        return resp.json()
+
+    @staticmethod
+    def create_hook(owner, repo, event, path):
+        """
+        Create github webhook
+        """
+        path_params = get_path_params(owner, repo)
+        url = "{base}/repos/{owner}/{repo}/hooks".format(**path_params)
+        webhook_config = templates.webhook.copy()
+
+        webhook_config["events"][0] = event
+        webhook_config["config"]["url"] = path
+        resp = requests.post(url, data=json.dumps(webhook_config), auth=auth)
+        if resp.status_code is not 201:
+            raise HooksFailed("Error creating hook",
+                              status_code=resp.status_code,
+                              details=resp.json())
+        return resp.json()
+
+    @staticmethod
+    def get_hook(hooks, match):
         """
         Check to see if our hook exists
         """
-        hooks = {}
-        for hook in self.list_hooks(owner, repo):
-            if hook["config"]["url"] == ORCHESTRATOR_WEBHOOK:
-                hooks["orchestrator"] = hook
-            elif hook["config"]["url"] == IMAGE_FACTORY_WEBHOOK:
-                hooks["image_factory"] = hook
+        for hook in hooks:
+            if match in hook["config"]["url"]:
+                return hook
 
-        return hooks
+        raise HooksFailed("Error getting hook",
+                          status_code=404,
+                          details="Hook does not exist on repo: %s" % match)
+
+    @staticmethod
+    def get_totem_hooks(hooks):
+        """
+        Get hooks specific to totem
+        """
+        totem_hooks = {}
+        for hook in hooks:
+            url = hook["config"]["url"]
+            if url == IMAGE_FACTORY_WEBHOOK:
+                totem_hooks["image_factory"] = hook
+            elif url == ORCHESTRATOR_WEBHOOK:
+                totem_hooks["orchestrator"] = hook
+
+        return totem_hooks
 
 
 class GithubFileRequests():
@@ -102,5 +142,15 @@ class GithubFileRequests():
 
     def add_totem(self, owner, repo):
         totem = FileService.get_totem()
-        resp = self.add_file(owner, repo, "test.yml", FileService.to_string(totem))
-        return resp
+        # resp = self.add_file(owner, repo, "totem.yml", FileService.to_string(totem))
+        return totem
+
+    def add_travis(self, owner, repo):
+        travis = FileService.get_travis()
+        travis["notifications"]["webhooks"] = [TRAVIS_WEBHOOK]
+        # resp = self.add_file(owner, repo, ".travis.yml", FileService.to_string(travis))
+        return travis
+
+    def add_dockerfile(self, owner, repo):
+        docker = FileService.get_dockerfile()
+        pass

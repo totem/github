@@ -1,3 +1,4 @@
+from flask import request
 from flask.views import MethodView
 from github.views import util
 from github.services.github_service import GithubHookRequests
@@ -10,14 +11,18 @@ class HooksApi(MethodView):
         """
         Get all hooks for a repository
         """
-        hooks = hook_service.list_hooks(owner, repo_name)
+        match = request.args.get("match")
+        if match:
+            hooks = hook_service.get_hook(owner, repo_name, match)
+        else:
+            hooks = hook_service.list_hooks(owner, repo_name)
         return util.build_response(hooks)
 
     def post(self, owner=None, repo_name=None):
         """
         Create hook for a repository
         """
-        resp = hook_service.create_hook(owner, repo_name)
+        resp = hook_service.create_totem_hooks(owner, repo_name)
         return util.build_response(resp)
 
     def delete(self, owner=None, repo_name=None):
