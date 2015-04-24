@@ -21,4 +21,6 @@ class FilesApi(MethodView):
 
 
 def register(app):
-    app.add_url_rule("/file/<owner>/<repo>/<file_type>", view_func=FilesApi.as_view('files'), methods=["GET"])
+    app.add_url_rule("/file/<owner>/<repo>/<file_type>",
+                     view_func=FilesApi.as_view('files'),
+                     methods=["GET"])

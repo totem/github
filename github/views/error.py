@@ -41,7 +41,8 @@ def register(app, **kwargs):
     @app.errorhandler(404)
     def page_not_found(error):
         return as_flask_error(error, **{
-            "message": "The given resource:%s is not found on server" % request.path,
+            "message": "The given resource:%s is not found on server"
+                       % request.path,
             "code": "NOT_FOUND",
             "status": 404
         })

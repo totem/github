@@ -13,7 +13,9 @@ class HooksApi(MethodView):
         """
         match = request.args.get("match")
         if match:
-            hooks = hook_service.get_hook(owner, repo_name, match)
+            hooks = hook_service.get_hook(
+                hook_service.list_hooks(owner, repo_name), match
+            )
         else:
             hooks = hook_service.list_hooks(owner, repo_name)
         return util.build_response(hooks)
@@ -34,5 +36,6 @@ class HooksApi(MethodView):
 
 
 def register(app):
-    app.add_url_rule("/organizations/<owner>/repos/<repo_name>/hooks", view_func=HooksApi.as_view('github'),
+    app.add_url_rule("/organizations/<owner>/repos/<repo_name>/hooks",
+                     view_func=HooksApi.as_view('github'),
                      methods=["GET", "POST", "DELETE"])

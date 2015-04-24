@@ -9,7 +9,7 @@ webhook = {
     "events": [
         "push"
     ],
-    "config" : {
+    "config": {
         "url": "",
         "content_type": "json"
     }

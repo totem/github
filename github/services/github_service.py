@@ -1,7 +1,8 @@
 import requests
 import json
 import base64
-from conf.appconfig import GITHUB, ORCHESTRATOR_WEBHOOK, IMAGE_FACTORY_WEBHOOK, TRAVIS_WEBHOOK
+from conf.appconfig import GITHUB, ORCHESTRATOR_WEBHOOK, \
+    IMAGE_FACTORY_WEBHOOK, TRAVIS_WEBHOOK
 from github.config_templates import templates
 from github.services.file_service import FileService
 from github.views.error import HooksFailed
@@ -30,14 +31,19 @@ class GithubHookRequests():
         hooks = self.list_hooks(owner, repo)
         existing_hooks = self.get_totem_hooks(hooks)
 
-        if "image_factory" in existing_hooks and "orchestrator" in existing_hooks:
+        if "image_factory" in existing_hooks and \
+           "orchestrator" in existing_hooks:
             return existing_hooks
 
         if "image_factory" not in existing_hooks:
-            resp.append(self.create_hook(owner, repo, "push", IMAGE_FACTORY_WEBHOOK))
+            resp.append(
+                self.create_hook(owner, repo, "push", IMAGE_FACTORY_WEBHOOK)
+            )
 
         if "orchestrator" not in existing_hooks:
-            resp.append(self.create_hook(owner, repo, "delete", ORCHESTRATOR_WEBHOOK))
+            resp.append(
+                self.create_hook(owner, repo, "delete", ORCHESTRATOR_WEBHOOK)
+            )
 
         return resp
 
@@ -56,11 +62,13 @@ class GithubHookRequests():
                                   status_code=404,
                                   details="Totem hooks do not exist on repo")
 
-            ids = map(lambda service: existing_hooks[service]["id"], existing_hooks)
+            ids = map(lambda service: existing_hooks[service]["id"],
+                      existing_hooks)
 
         for hook_id in ids:
             path_params = get_path_params(owner, repo, hook_id)
-            url = "{base}/repos/{owner}/{repo}/hooks/{id}".format(**path_params)
+            url = "{base}/repos/{owner}/{repo}/hooks/{id}"\
+                .format(**path_params)
             resp = requests.delete(url, auth=auth)
 
             if resp.status_code != 204:
@@ -89,7 +97,8 @@ class GithubHookRequests():
         Create github webhook
         """
         path_params = get_path_params(owner, repo)
-        url = "{base}/repos/{owner}/{repo}/hooks".format(**path_params)
+        url = "{base}/repos/{owner}/{repo}/hooks"\
+            .format(**path_params)
         webhook_config = templates.webhook.copy()
 
         webhook_config["events"][0] = event
@@ -133,7 +142,8 @@ class GithubHookRequests():
 class GithubFileRequests():
     def add_file(self, owner, repo, filename, content):
         path_params = get_path_params(owner, repo, path=filename)
-        url = "{base}/repos/{owner}/{repo}/contents/{path}".format(**path_params)
+        url = "{base}/repos/{owner}/{repo}/contents/{path}"\
+            .format(**path_params)
         data = templates.create_file.copy()
         data["path"] = filename
         data["content"] = base64.b64encode(content)
@@ -142,15 +152,17 @@ class GithubFileRequests():
 
     def add_totem(self, owner, repo):
         totem = FileService.get_totem()
-        # resp = self.add_file(owner, repo, "totem.yml", FileService.to_string(totem))
+        # resp = self.add_file(owner, repo,
+        #                      "totem.yml", FileService.to_string(totem))
         return totem
 
     def add_travis(self, owner, repo):
         travis = FileService.get_travis()
         travis["notifications"]["webhooks"] = [TRAVIS_WEBHOOK]
-        # resp = self.add_file(owner, repo, ".travis.yml", FileService.to_string(travis))
+        # resp = self.add_file(owner, repo,
+        #                      ".travis.yml", FileService.to_string(travis))
         return travis
 
     def add_dockerfile(self, owner, repo):
-        docker = FileService.get_dockerfile()
+        # docker = FileService.get_dockerfile()
         pass

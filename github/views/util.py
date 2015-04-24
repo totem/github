@@ -1,5 +1,5 @@
 import json
-from flask import Response, jsonify, abort
+from flask import Response, jsonify
 from conf.appconfig import MIME_JSON
 
 
